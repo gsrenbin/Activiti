@@ -1,12 +1,27 @@
+/*
+ * Copyright 2010-2020 Alfresco Software, Ltd.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 package org.activiti.spring.boot;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.tuple;
+import static org.codehaus.groovy.runtime.InvokerHelper.asList;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -29,27 +44,16 @@ import org.activiti.api.task.runtime.events.TaskCreatedEvent;
 import org.activiti.api.task.runtime.events.TaskUpdatedEvent;
 import org.activiti.api.task.runtime.events.listener.TaskRuntimeEventListener;
 import org.activiti.core.common.spring.identity.ExtendedInMemoryUserDetailsManager;
-import org.activiti.spring.boot.process.ProcessBaseRuntime;
-import org.activiti.spring.boot.security.util.SecurityUtil;
-import org.activiti.spring.boot.tasks.TaskBaseRuntime;
-import org.activiti.spring.boot.test.util.ProcessCleanUpUtil;
-import org.activiti.spring.boot.test.util.TaskCleanUpUtil;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.context.annotation.Import;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.userdetails.User;
 import org.springframework.security.core.userdetails.UserDetailsService;
 
 @Configuration
-@Import({ProcessCleanUpUtil.class,
-         TaskCleanUpUtil.class,
-         SecurityUtil.class,
-         ProcessBaseRuntime.class,
-         TaskBaseRuntime.class})
 public class RuntimeTestConfiguration {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(RuntimeTestConfiguration.class);
@@ -312,17 +316,13 @@ public class RuntimeTestConfiguration {
             Integer integerConstantValue = (Integer) inBoundVariables.get(integerConstant);
 
             String[] array = { "first", "John", "Doe", "last" };
-            List<String> list = Arrays.asList(array);
+            List<String> list = asList(array);
 
             Map<String, Object> dataMap = new HashMap<>();
-            dataMap.put("age-in-months",
-                        240L);
-            dataMap.put("full-name",
-                        "John Doe");
-            dataMap.put("demoString",
-                        "expressionResolved");
-            dataMap.put("list",
-                        list);
+            dataMap.put("age-in-months", 240L);
+            dataMap.put("full-name", "John Doe");
+            dataMap.put("demoString", "expressionResolved");
+            dataMap.put("list", list);
 
             Map<String, Object> expectedResolvedJsonTemplate = new HashMap<>();
             expectedResolvedJsonTemplate.put("name", "John");
@@ -331,31 +331,19 @@ public class RuntimeTestConfiguration {
 
             assertThat(inBoundVariables.entrySet()).extracting(Map.Entry::getKey,
                                                                Map.Entry::getValue)
-                    .containsOnly(tuple(variableOne,
-                                        dataMap),
-                                  tuple(variableTwo,
-                                        20),
-                                  tuple(variableThree,
-                                        "Hello John Doe, today is your 20th birthday! It means 7305.0 days of life"),
-                                  tuple(expressionVariable,
-                                        "John"),
-                                  tuple(expressionValue,
-                                        "John"),
-                                  tuple(staticValue,
-                                        "a static value"),
-                                  tuple(integerConstant,
-                                        10),
-                                  tuple("input-json-template",
-                                        expectedResolvedJsonTemplate));
+                    .containsOnly(tuple(variableOne, dataMap),
+                                  tuple(variableTwo, 20),
+                                  tuple(variableThree, "Hello John Doe, today is your 20th birthday! It means 7305.0 days of life"),
+                                  tuple(expressionVariable, "John"),
+                                  tuple(expressionValue, "John"),
+                                  tuple(staticValue, "a static value"),
+                                  tuple(integerConstant, 10),
+                                  tuple("input-json-template", expectedResolvedJsonTemplate));
 
-            integrationContext.addOutBoundVariable("out-variable-name-1",
-                                                   "outName");
-            integrationContext.addOutBoundVariable("out-variable-name-2",
-                                                   currentAge + integerConstantValue);
-            integrationContext.addOutBoundVariable("out-unmapped-variable-matching-name",
-                                                   "outTest");
-            integrationContext.addOutBoundVariable("out-unmapped-variable-non-matching-name",
-                                                   "outTest");
+            integrationContext.addOutBoundVariable("out-variable-name-1", "outName");
+            integrationContext.addOutBoundVariable("out-variable-name-2", currentAge + integerConstantValue);
+            integrationContext.addOutBoundVariable("out-unmapped-variable-matching-name", "outTest");
+            integrationContext.addOutBoundVariable("out-unmapped-variable-non-matching-name", "outTest");
 
             Map<String, Object> conferenceInfo = new HashMap<>();
             conferenceInfo.put("City", "London");

@@ -1,11 +1,11 @@
 /*
- * Copyright 2018 Alfresco, Inc. and/or its affiliates.
+ * Copyright 2010-2020 Alfresco Software, Ltd.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *       http://www.apache.org/licenses/LICENSE-2.0
+ *     http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -16,9 +16,9 @@
 
 package org.activiti.runtime.api.conf;
 
-import java.util.Collections;
-import java.util.List;
+import static java.util.Collections.emptyList;
 
+import java.util.List;
 import org.activiti.api.model.shared.event.VariableCreatedEvent;
 import org.activiti.api.model.shared.event.VariableUpdatedEvent;
 import org.activiti.api.runtime.shared.events.VariableEventListener;
@@ -27,6 +27,7 @@ import org.activiti.engine.delegate.event.ActivitiEventType;
 import org.activiti.runtime.api.event.impl.ToVariableCreatedConverter;
 import org.activiti.runtime.api.event.impl.ToVariableUpdatedConverter;
 import org.activiti.runtime.api.event.internal.VariableCreatedListenerDelegate;
+import org.activiti.runtime.api.event.internal.VariableEventFilter;
 import org.activiti.runtime.api.event.internal.VariableUpdatedListenerDelegate;
 import org.activiti.runtime.api.impl.VariableNameValidator;
 import org.activiti.runtime.api.model.impl.APIVariableInstanceConverter;
@@ -44,21 +45,34 @@ public class CommonRuntimeAutoConfiguration {
     }
 
     @Bean
+    public VariableEventFilter variableEventFilter() {
+        return new VariableEventFilter();
+    }
+
+    @Bean
     public InitializingBean registerVariableCreatedListenerDelegate(RuntimeService runtimeService,
-                                                                    @Autowired(required = false) List<VariableEventListener<VariableCreatedEvent>> listeners) {
-        return () -> runtimeService.addEventListener(new VariableCreatedListenerDelegate(getInitializedListeners(listeners), new ToVariableCreatedConverter()), ActivitiEventType.VARIABLE_CREATED);
+        @Autowired(required = false) List<VariableEventListener<VariableCreatedEvent>> listeners,
+        VariableEventFilter variableEventFilter) {
+        return () -> runtimeService.addEventListener(
+            new VariableCreatedListenerDelegate(getInitializedListeners(listeners),
+                new ToVariableCreatedConverter(),
+                variableEventFilter), ActivitiEventType.VARIABLE_CREATED);
     }
 
     private <T> List<T> getInitializedListeners(List<T> eventListeners) {
-        return eventListeners != null ? eventListeners : Collections.emptyList();
+        return eventListeners != null ? eventListeners : emptyList();
     }
 
     @Bean
     public InitializingBean registerVariableUpdatedListenerDelegate(RuntimeService runtimeService,
-                                                                    @Autowired(required = false) List<VariableEventListener<VariableUpdatedEvent>> listeners) {
-        return () -> runtimeService.addEventListener(new VariableUpdatedListenerDelegate(getInitializedListeners(listeners), new ToVariableUpdatedConverter()), ActivitiEventType.VARIABLE_UPDATED);
+        @Autowired(required = false) List<VariableEventListener<VariableUpdatedEvent>> listeners,
+        VariableEventFilter variableEventFilter) {
+        return () -> runtimeService.addEventListener(
+            new VariableUpdatedListenerDelegate(getInitializedListeners(listeners),
+                new ToVariableUpdatedConverter(),
+                variableEventFilter), ActivitiEventType.VARIABLE_UPDATED);
     }
-    
+
     @Bean
     public VariableNameValidator variableNameValidator() {
         return new VariableNameValidator();

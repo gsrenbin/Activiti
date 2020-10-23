@@ -1,11 +1,11 @@
 /*
- * Copyright 2018 Alfresco, Inc. and/or its affiliates.
+ * Copyright 2010-2020 Alfresco Software, Ltd.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *       http://www.apache.org/licenses/LICENSE-2.0
+ *     http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -21,23 +21,20 @@ import org.activiti.api.process.runtime.connector.Connector;
 import org.activiti.bpmn.model.ServiceTask;
 import org.activiti.engine.delegate.DelegateExecution;
 import org.activiti.engine.impl.bpmn.behavior.AbstractBpmnActivityBehavior;
-import org.activiti.runtime.api.impl.VariablesMappingProvider;
+import org.activiti.engine.impl.bpmn.behavior.VariablesCalculator;
 import org.springframework.context.ApplicationContext;
-
-import static org.activiti.runtime.api.impl.MappingExecutionContext.buildMappingExecutionContext;
 
 public class DefaultServiceTaskBehavior extends AbstractBpmnActivityBehavior {
 
     private final ApplicationContext applicationContext;
     private final IntegrationContextBuilder integrationContextBuilder;
-    private VariablesMappingProvider outboundVariablesProvider;
 
     public DefaultServiceTaskBehavior(ApplicationContext applicationContext,
                                       IntegrationContextBuilder integrationContextBuilder,
-                                      VariablesMappingProvider outboundVariablesProvider) {
+                                      VariablesCalculator variablesCalculator) {
         this.applicationContext = applicationContext;
         this.integrationContextBuilder = integrationContextBuilder;
-        this.outboundVariablesProvider = outboundVariablesProvider;
+        setVariablesCalculator(variablesCalculator);
     }
 
     /**
@@ -49,8 +46,7 @@ public class DefaultServiceTaskBehavior extends AbstractBpmnActivityBehavior {
         Connector connector = getConnector(getImplementation(execution));
         IntegrationContext integrationContext = connector.apply(integrationContextBuilder.from(execution));
 
-        execution.setVariables(outboundVariablesProvider.calculateOutPutVariables(buildMappingExecutionContext(execution),
-                                                                                  integrationContext.getOutBoundVariables()));
+        execution.setVariablesLocal(integrationContext.getOutBoundVariables());
 
         leave(execution);
     }

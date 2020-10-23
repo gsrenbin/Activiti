@@ -1,11 +1,11 @@
 /*
- * Copyright 2018 Alfresco, Inc. and/or its affiliates.
+ * Copyright 2010-2020 Alfresco Software, Ltd.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *       http://www.apache.org/licenses/LICENSE-2.0
+ *     http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -16,9 +16,9 @@
 
 package org.activiti.runtime.api.conf;
 
-import java.util.Collections;
-import java.util.List;
+import static java.util.Collections.emptyList;
 
+import java.util.List;
 import org.activiti.api.process.model.events.BPMNActivityCancelledEvent;
 import org.activiti.api.process.model.events.BPMNActivityCompletedEvent;
 import org.activiti.api.process.model.events.BPMNActivityStartedEvent;
@@ -115,7 +115,7 @@ import org.activiti.runtime.api.impl.ProcessVariablesPayloadValidator;
 import org.activiti.runtime.api.impl.RuntimeReceiveMessagePayloadEventListener;
 import org.activiti.runtime.api.impl.RuntimeSignalPayloadEventListener;
 import org.activiti.runtime.api.impl.VariableNameValidator;
-import org.activiti.runtime.api.impl.VariablesMappingProvider;
+import org.activiti.runtime.api.impl.ExtensionsVariablesMappingProvider;
 import org.activiti.runtime.api.message.ReceiveMessagePayloadEventListener;
 import org.activiti.runtime.api.model.impl.APIDeploymentConverter;
 import org.activiti.runtime.api.model.impl.APIProcessDefinitionConverter;
@@ -162,7 +162,8 @@ public class ProcessRuntimeAutoConfiguration {
 
     @Bean
     @ConditionalOnMissingBean(EventSubscriptionPayloadMappingProvider.class)
-    public EventSubscriptionPayloadMappingProvider eventSubscriptionPayloadMappingProvider(VariablesMappingProvider variablesMappingProvider) {
+    public EventSubscriptionPayloadMappingProvider eventSubscriptionPayloadMappingProvider(
+        ExtensionsVariablesMappingProvider variablesMappingProvider) {
         return new EventSubscriptionVariablesMappingProvider(variablesMappingProvider);
     }
 
@@ -210,15 +211,15 @@ public class ProcessRuntimeAutoConfiguration {
     @Bean
     @ConditionalOnMissingBean
     public MessageSubscriptionConverter messageEventSubscriptionConverter() {
-        return new MessageSubscriptionConverter(); 
+        return new MessageSubscriptionConverter();
     }
 
     @Bean
     @ConditionalOnMissingBean
     public StartMessageSubscriptionConverter startMessageEventSubscriptionConverter() {
-        return new StartMessageSubscriptionConverter(); 
+        return new StartMessageSubscriptionConverter();
     }
-    
+
     @Bean
     @ConditionalOnMissingBean
     public APIProcessDefinitionConverter apiProcessDefinitionConverter(RepositoryService repositoryService) {
@@ -230,13 +231,13 @@ public class ProcessRuntimeAutoConfiguration {
     public ProcessVariablesInitiator processVariablesInitiator(ProcessExtensionService processExtensionService,
                                                                VariableParsingService variableParsingService,
                                                                VariableValidationService variableValidationService,
-                                                               VariablesMappingProvider mappingProvider) {
+                                                               ExtensionsVariablesMappingProvider mappingProvider) {
         return new ProcessVariablesInitiator(processExtensionService,
                                              variableParsingService,
                                              variableValidationService,
                                              mappingProvider);
     }
-    
+
     @Bean
     @ConditionalOnMissingBean
     public ProcessVariablesPayloadValidator processVariablesValidator(DateFormatterProvider dateFormatterProvider,
@@ -302,7 +303,7 @@ public class ProcessRuntimeAutoConfiguration {
     }
 
     private <T> List<T> getInitializedListeners(List<T> eventListeners) {
-        return eventListeners != null ? eventListeners : Collections.emptyList();
+        return eventListeners != null ? eventListeners : emptyList();
     }
 
     @Bean
@@ -374,10 +375,13 @@ public class ProcessRuntimeAutoConfiguration {
     @Bean
     @ConditionalOnMissingBean(name = "registerProcessCancelledListenerDelegate")
     public InitializingBean registerProcessCancelledListenerDelegate(RuntimeService runtimeService,
-                                                                     @Autowired(required = false) List<ProcessRuntimeEventListener<ProcessCancelledEvent>> eventListeners) {
-        return () -> runtimeService.addEventListener(new ProcessCancelledListenerDelegate(getInitializedListeners(eventListeners),
-                        new ToProcessCancelledConverter()),
-                ActivitiEventType.PROCESS_CANCELLED);
+        APIProcessInstanceConverter processInstanceConverter,
+        @Autowired(required = false) List<ProcessRuntimeEventListener<ProcessCancelledEvent>> eventListeners) {
+
+        return () -> runtimeService.addEventListener(
+            new ProcessCancelledListenerDelegate(getInitializedListeners(eventListeners),
+                new ToProcessCancelledConverter(processInstanceConverter)),
+            ActivitiEventType.PROCESS_CANCELLED);
     }
 
     @Bean
@@ -528,7 +532,7 @@ public class ProcessRuntimeAutoConfiguration {
                         new ToMessageReceivedConverter(bpmnMessageConverter)),
                 ActivitiEventType.ACTIVITY_MESSAGE_RECEIVED);
     }
-    
+
     @Bean
     @ConditionalOnMissingBean(name = "registerMessageWaitingListenerDelegate")
     public InitializingBean registerMessageWaitingListenerDelegate(RuntimeService runtimeService,
@@ -557,7 +561,7 @@ public class ProcessRuntimeAutoConfiguration {
                         new ToErrorReceivedConverter(bpmnErrorConverter)),
                 ActivitiEventType.ACTIVITY_ERROR_RECEIVED);
     }
-    
+
     @Bean
     @ConditionalOnMissingBean(name = "registerMessageSubscriptionCancelledListenerDelegate")
     public InitializingBean registerMessageSubscriptionCancelledListenerDelegate(RuntimeService runtimeService,
@@ -566,5 +570,5 @@ public class ProcessRuntimeAutoConfiguration {
         return () -> runtimeService.addEventListener(new MessageSubscriptionCancelledListenerDelegate(getInitializedListeners(eventListeners),
                                                                                                       new ToMessageSubscriptionCancelledConverter(converter)),
                                                      ActivitiEventType.ENTITY_DELETED);
-    }    
+    }
 }

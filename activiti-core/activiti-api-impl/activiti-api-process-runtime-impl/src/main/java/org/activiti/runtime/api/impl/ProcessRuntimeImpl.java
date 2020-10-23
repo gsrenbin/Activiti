@@ -1,11 +1,11 @@
 /*
- * Copyright 2020 Alfresco, Inc. and/or its affiliates.
+ * Copyright 2010-2020 Alfresco Software, Ltd.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *      http://www.apache.org/licenses/LICENSE-2.0
+ *     http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -13,13 +13,14 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package org.activiti.runtime.api.impl;
 
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.stream.Collectors;
+
 import org.activiti.api.model.shared.model.VariableInstance;
 import org.activiti.api.process.model.Deployment;
 import org.activiti.api.process.model.ProcessDefinition;
@@ -27,6 +28,7 @@ import org.activiti.api.process.model.ProcessDefinitionMeta;
 import org.activiti.api.process.model.ProcessInstance;
 import org.activiti.api.process.model.ProcessInstanceMeta;
 import org.activiti.api.process.model.builders.ProcessPayloadBuilder;
+import org.activiti.api.process.model.payloads.CreateProcessInstancePayload;
 import org.activiti.api.process.model.payloads.DeleteProcessPayload;
 import org.activiti.api.process.model.payloads.GetProcessDefinitionsPayload;
 import org.activiti.api.process.model.payloads.GetProcessInstancesPayload;
@@ -45,8 +47,8 @@ import org.activiti.api.process.runtime.conf.ProcessRuntimeConfiguration;
 import org.activiti.api.runtime.model.impl.ProcessDefinitionMetaImpl;
 import org.activiti.api.runtime.model.impl.ProcessInstanceImpl;
 import org.activiti.api.runtime.model.impl.ProcessInstanceMetaImpl;
-import org.activiti.api.runtime.shared.UnprocessableEntityException;
 import org.activiti.api.runtime.shared.NotFoundException;
+import org.activiti.api.runtime.shared.UnprocessableEntityException;
 import org.activiti.api.runtime.shared.query.Page;
 import org.activiti.api.runtime.shared.query.Pageable;
 import org.activiti.core.common.spring.security.policies.ActivitiForbiddenException;
@@ -56,6 +58,7 @@ import org.activiti.engine.ActivitiObjectNotFoundException;
 import org.activiti.engine.RepositoryService;
 import org.activiti.engine.RuntimeService;
 import org.activiti.engine.repository.ProcessDefinitionQuery;
+import org.activiti.engine.runtime.ProcessInstanceBuilder;
 import org.activiti.runtime.api.model.impl.APIDeploymentConverter;
 import org.activiti.runtime.api.model.impl.APIProcessDefinitionConverter;
 import org.activiti.runtime.api.model.impl.APIProcessInstanceConverter;
@@ -127,6 +130,8 @@ public class ProcessRuntimeImpl implements ProcessRuntime {
 
     private Optional<org.activiti.engine.repository.ProcessDefinition> findLatestProcessDefinitionByKey(String processDefinitionKey) {
         return repositoryService.createProcessDefinitionQuery()
+            .latestVersion()
+            .deploymentIds(latestDeploymentIds())
             .processDefinitionKey(processDefinitionKey)
             .orderByProcessDefinitionAppVersion()
             .desc()
@@ -135,8 +140,19 @@ public class ProcessRuntimeImpl implements ProcessRuntime {
             .findFirst();
     }
 
-    private void checkProcessDefinitionBelongsToLatestDeployment(org.activiti.engine.repository.ProcessDefinition processDefinition){
-        if (!selectLatestDeployment().getVersion().equals(processDefinition.getAppVersion())) {
+    private Set<String> latestDeploymentIds() {
+        return repositoryService.createDeploymentQuery()
+                                .latestVersion()
+                                .list()
+                                .stream()
+                                .map(org.activiti.engine.repository.Deployment::getId)
+                                .collect(Collectors.toSet());
+    }
+
+    private void checkProcessDefinitionBelongsToLatestDeployment(org.activiti.engine.repository.ProcessDefinition processDefinition) {
+        Integer appVersion = processDefinition.getAppVersion();
+
+        if (appVersion != null && !selectLatestDeployment().getVersion().equals(appVersion)) {
             throw new UnprocessableEntityException("Process definition with the given id:'" + processDefinition.getId() + "' belongs to a different application version.");
         }
     }
@@ -159,26 +175,18 @@ public class ProcessRuntimeImpl implements ProcessRuntime {
         if (!securityKeysInPayload.getProcessDefinitionKeys().isEmpty()) {
             getProcessDefinitionsPayload.setProcessDefinitionKeys(securityKeysInPayload.getProcessDefinitionKeys());
         }
+
         ProcessDefinitionQuery processDefinitionQuery = repositoryService
-                .createProcessDefinitionQuery();
+                .createProcessDefinitionQuery()
+                .latestVersion()
+                .deploymentIds(latestDeploymentIds());
+
         if (getProcessDefinitionsPayload.hasDefinitionKeys()) {
             processDefinitionQuery.processDefinitionKeys(getProcessDefinitionsPayload.getProcessDefinitionKeys());
         }
 
-        List<org.activiti.engine.repository.ProcessDefinition> currentVersionDefinitions = filterCurrentVersionDefinitions(processDefinitionQuery.list());
-
-        return new PageImpl<>(processDefinitionConverter.from(currentVersionDefinitions),
+        return new PageImpl<>(processDefinitionConverter.from(processDefinitionQuery.list()),
                               Math.toIntExact(processDefinitionQuery.count()));
-    }
-
-    private List<org.activiti.engine.repository.ProcessDefinition> filterCurrentVersionDefinitions (List<org.activiti.engine.repository.ProcessDefinition> allDefinitions){
-        int currentVersion = selectLatestDeployment().getVersion();
-        return allDefinitions
-                .stream()
-                .filter(processDefinition -> processDefinition.getAppVersion() == null ||
-                                             processDefinition.getAppVersion().equals(currentVersion))
-                //we fetch possible unversioned definitions from different types of deployments
-                .collect(Collectors.toList());
     }
 
     @Override
@@ -249,19 +257,57 @@ public class ProcessRuntimeImpl implements ProcessRuntime {
     @Override
     public ProcessInstance start(StartProcessPayload startProcessPayload) {
 
+
+        return processInstanceConverter.from(this.createProcessInstanceBuilder(startProcessPayload).start());
+    }
+
+    @Override
+    public ProcessInstance startCreatedProcess(String processInstanceId, StartProcessPayload startProcessPayload) {
+        org.activiti.engine.runtime.ProcessInstance internalProcessInstance = runtimeService
+                                                                                .createProcessInstanceQuery()
+                                                                                .processInstanceId(processInstanceId)
+                                                                                .singleResult();
+        if (internalProcessInstance == null) {
+            throw new NotFoundException("Unable to find process instance for the given id:'" + processInstanceId + "'");
+        }
+
+        if (!securityPoliciesManager.canRead(internalProcessInstance.getProcessDefinitionKey())) {
+            throw new ActivitiObjectNotFoundException("You cannot read the process instance with Id:'" + processInstanceId + "' due to security policies violation");
+        }
+       processVariablesValidator.checkStartProcessPayloadVariables(startProcessPayload, internalProcessInstance.getProcessDefinitionId());
+       return processInstanceConverter.from(runtimeService.startCreatedProcessInstance(internalProcessInstance, startProcessPayload.getVariables()));
+    }
+
+    @Override
+    public ProcessInstance create(CreateProcessInstancePayload startProcessPayload) {
+        return processInstanceConverter.from(createProcessInstanceBuilder(startProcessPayload).create());
+    }
+
+    private ProcessInstanceBuilder createProcessInstanceBuilder(StartProcessPayload startProcessPayload) {
         ProcessDefinition processDefinition = getProcessDefinitionAndCheckUserHasRights(startProcessPayload.getProcessDefinitionId(),
-                                                                                        startProcessPayload.getProcessDefinitionKey());
+            startProcessPayload.getProcessDefinitionKey());
 
         processVariablesValidator.checkStartProcessPayloadVariables(startProcessPayload, processDefinition.getId());
 
-        return processInstanceConverter.from(runtimeService
-                .createProcessInstanceBuilder()
-                .processDefinitionId(processDefinition.getId())
-                .processDefinitionKey(processDefinition.getKey())
-                .businessKey(startProcessPayload.getBusinessKey())
-                .variables(startProcessPayload.getVariables())
-                .name(startProcessPayload.getName())
-                .start());
+        return runtimeService
+            .createProcessInstanceBuilder()
+            .processDefinitionId(processDefinition.getId())
+            .processDefinitionKey(processDefinition.getKey())
+            .businessKey(startProcessPayload.getBusinessKey())
+            .variables(startProcessPayload.getVariables())
+            .name(startProcessPayload.getName());
+    }
+
+    private ProcessInstanceBuilder createProcessInstanceBuilder(CreateProcessInstancePayload createProcessPayload) {
+        ProcessDefinition processDefinition = getProcessDefinitionAndCheckUserHasRights(createProcessPayload.getProcessDefinitionId(),
+            createProcessPayload.getProcessDefinitionKey());
+
+        return runtimeService
+            .createProcessInstanceBuilder()
+            .processDefinitionId(processDefinition.getId())
+            .processDefinitionKey(processDefinition.getKey())
+            .businessKey(createProcessPayload.getBusinessKey())
+            .name(createProcessPayload.getName());
     }
 
     @Override
@@ -411,7 +457,7 @@ public class ProcessRuntimeImpl implements ProcessRuntime {
         }
     }
 
-    private ProcessDefinition getProcessDefinitionAndCheckUserHasRights(String processDefinitionId, String processDefinitionKey) {
+    protected ProcessDefinition getProcessDefinitionAndCheckUserHasRights(String processDefinitionId, String processDefinitionKey) {
 
         String checkId = processDefinitionKey != null ? processDefinitionKey : processDefinitionId;
 
@@ -430,8 +476,10 @@ public class ProcessRuntimeImpl implements ProcessRuntime {
     public Deployment selectLatestDeployment(){
         return deploymentConverter.from(
                 repositoryService
-                        .createDeploymentQuery()
-                        .singleResult()
+                    .createDeploymentQuery()
+                    .deploymentName("SpringAutoDeployment")
+                    .latestVersion()
+                    .singleResult()
         );
     }
 

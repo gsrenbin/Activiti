@@ -1,3 +1,18 @@
+/*
+ * Copyright 2010-2020 Alfresco Software, Ltd.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 package org.activiti.spring.boot.process;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -17,22 +32,19 @@ import org.activiti.api.task.model.builders.TaskPayloadBuilder;
 import org.activiti.api.task.runtime.TaskRuntime;
 import org.activiti.spring.boot.security.util.SecurityUtil;
 import org.activiti.spring.boot.test.util.ProcessCleanUpUtil;
-import org.junit.After;
-import org.junit.Test;
-import org.junit.runner.RunWith;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.test.context.junit4.SpringRunner;
 
-@RunWith(SpringRunner.class)
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.NONE)
 public class ProcessRuntimeCallActivityMappingIT {
 
     private static final String PARENT_PROCESS_CALL_ACTIVITY = "parentproc-843144bc-3797-40db-8edc-d23190b118e5";
     private static final String SUB_PROCESS_CALL_ACTIVITY = "subprocess-fb5f2386-709a-4947-9aa0-bbf31497384g";
 
-    private static final String PARENT_PROCESS_CALL_ACTIVITY_EMPTY_MAPPING_NO_TASK = "parentproc-843144bc-3797-40db-8edc-d23190b118e6";
-    private static final String PARENT_PROCESS_CALL_ACTIVITY_EMPTY_MAPPING_WITH_TASK = "parentproc-843144bc-3797-40db-8edc-d23190b118e7";
+    private static final String PARENT_PROCESS_CALL_ACTIVITY_MAP_ALL_NO_TASK = "parentproc-843144bc-3797-40db-8edc-d23190b118e6";
+    private static final String PARENT_PROCESS_CALL_ACTIVITY_NO_MAPPING_WITH_TASK = "parentproc-843144bc-3797-40db-8edc-d23190b118e7";
 
     @Autowired
     private ProcessRuntime processRuntime;
@@ -46,7 +58,7 @@ public class ProcessRuntimeCallActivityMappingIT {
     @Autowired
     private ProcessCleanUpUtil processCleanUpUtil;
 
-    @After
+    @AfterEach
     public void cleanUp() {
         processCleanUpUtil.cleanUpWithAdmin();
     }
@@ -122,7 +134,7 @@ public class ProcessRuntimeCallActivityMappingIT {
         ProcessInstance processInstance = processRuntime.start(
                 ProcessPayloadBuilder
                         .start()
-                        .withProcessDefinitionKey(PARENT_PROCESS_CALL_ACTIVITY_EMPTY_MAPPING_NO_TASK)
+                        .withProcessDefinitionKey(PARENT_PROCESS_CALL_ACTIVITY_MAP_ALL_NO_TASK)
                         .build());
         assertThat(processInstance).isNotNull();
 
@@ -250,7 +262,7 @@ public class ProcessRuntimeCallActivityMappingIT {
         ProcessInstance processInstance = processRuntime.start(
                 ProcessPayloadBuilder
                         .start()
-                        .withProcessDefinitionKey(PARENT_PROCESS_CALL_ACTIVITY_EMPTY_MAPPING_WITH_TASK)
+                        .withProcessDefinitionKey(PARENT_PROCESS_CALL_ACTIVITY_NO_MAPPING_WITH_TASK)
                         .build());
         assertThat(processInstance).isNotNull();
 

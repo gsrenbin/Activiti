@@ -1,8 +1,11 @@
-/* Licensed under the Apache License, Version 2.0 (the "License");
+/*
+ * Copyright 2010-2020 Alfresco Software, Ltd.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *      http://www.apache.org/licenses/LICENSE-2.0
+ *     http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -10,24 +13,25 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package org.activiti.spring.process;
 
-import java.util.Collections;
+import static java.util.Collections.emptyMap;
+
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
-
 import org.activiti.bpmn.model.FlowElement;
-import org.activiti.bpmn.model.Process;
 import org.activiti.engine.ActivitiException;
+import org.activiti.engine.impl.bpmn.behavior.MappingExecutionContext;
+import org.activiti.engine.impl.bpmn.behavior.VariablesCalculator;
+import org.activiti.engine.impl.interceptor.CommandContext;
 import org.activiti.engine.impl.persistence.entity.ExecutionEntity;
+import org.activiti.engine.impl.util.ProcessDefinitionUtil;
 import org.activiti.engine.impl.util.ProcessInstanceHelper;
 import org.activiti.engine.repository.ProcessDefinition;
-import org.activiti.runtime.api.impl.MappingExecutionContext;
-import org.activiti.runtime.api.impl.VariablesMappingProvider;
+import org.activiti.runtime.api.impl.ExtensionsVariablesMappingProvider;
 import org.activiti.spring.process.model.Extension;
 import org.activiti.spring.process.model.VariableDefinition;
 import org.activiti.spring.process.variable.VariableParsingService;
@@ -41,16 +45,16 @@ public class ProcessVariablesInitiator extends ProcessInstanceHelper {
 
     private final VariableValidationService variableValidationService;
 
-    private VariablesMappingProvider mappingProvider;
+    private VariablesCalculator variablesCalculator;
 
     public ProcessVariablesInitiator(ProcessExtensionService processExtensionService,
                                      VariableParsingService variableParsingService,
                                      VariableValidationService variableValidationService,
-                                     VariablesMappingProvider mappingProvider) {
+                                     VariablesCalculator variablesCalculator) {
         this.processExtensionService = processExtensionService;
         this.variableParsingService = variableParsingService;
         this.variableValidationService = variableValidationService;
-        this.mappingProvider = mappingProvider;
+        this.variablesCalculator = variablesCalculator;
     }
 
     public Map<String, Object> calculateVariablesFromExtensionFile(ProcessDefinition processDefinition,
@@ -79,37 +83,27 @@ public class ProcessVariablesInitiator extends ProcessInstanceHelper {
         return processedVariables;
     }
 
-    @Override
-    public ExecutionEntity createProcessInstanceWithInitialFlowElement(ProcessDefinition processDefinition,
-                                                                       String businessKey,
-                                                                       String processInstanceName,
-                                                                       FlowElement initialFlowElement,
-                                                                       Process process,
-                                                                       Map<String, Object> variables,
-                                                                       Map<String, Object> transientVariables) {
+    public Map<String, Object> calculateOutputVariables(Map<String, Object> variables, ProcessDefinition processDefinition, FlowElement initialFlowElement) {
         Map<String, Object> processVariables = variables;
 
         if (processExtensionService.hasExtensionsFor(processDefinition)) {
 
-            processVariables = mappingProvider.calculateOutPutVariables(MappingExecutionContext.buildMappingExecutionContext(processDefinition.getId(),
-                                                                                                                             initialFlowElement.getId()),
-                                                                        variables);
+            Map<String, Object> calculateOutPutVariables = variablesCalculator.calculateOutPutVariables(MappingExecutionContext.buildMappingExecutionContext(
+                processDefinition.getId(),
+                initialFlowElement.getId()),
+                variables);
+            if(!calculateOutPutVariables.isEmpty()) {
+                processVariables = calculateOutPutVariables;
+            }
 
             processVariables = calculateVariablesFromExtensionFile(processDefinition,
-                                                                   processVariables);
+                processVariables);
         }
-
-        return super.createProcessInstanceWithInitialFlowElement(processDefinition,
-                businessKey,
-                processInstanceName,
-                initialFlowElement,
-                process,
-                processVariables,
-                transientVariables);
+        return processVariables;
     }
 
     private Map<String, Object> processVariables(Map<String, Object> variables, Map<String, VariableDefinition> variableDefinitionMap) {
-        Map<String, Object> newVarsMap = new HashMap<>(Optional.ofNullable(variables).orElse(Collections.emptyMap()));
+        Map<String, Object> newVarsMap = new HashMap<>(Optional.ofNullable(variables).orElse(emptyMap()));
         variableDefinitionMap.forEach((k, v) -> {
             if (!newVarsMap.containsKey(v.getName()) && v.getValue() != null) {
                 newVarsMap.put(v.getName(), createDefaultVariableValue(v));
@@ -144,5 +138,11 @@ public class ProcessVariablesInitiator extends ProcessInstanceHelper {
             }
         });
         return mismatchedVars;
+    }
+
+    public void startProcessInstance(ExecutionEntity processInstance, CommandContext commandContext, Map<String, Object> variables, FlowElement initialFlowElement, Map<String, Object> transientVariables) {
+        ProcessDefinition processDefinition = ProcessDefinitionUtil.getProcessDefinition(processInstance.getProcessDefinitionId());
+        Map<String, Object> calculatedVariables = calculateOutputVariables(variables, processDefinition, initialFlowElement);
+        super.startProcessInstance(processInstance, commandContext, calculatedVariables, initialFlowElement, transientVariables);
     }
 }

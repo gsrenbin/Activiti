@@ -1,11 +1,11 @@
 /*
- * Copyright 2018 Alfresco, Inc. and/or its affiliates.
+ * Copyright 2010-2020 Alfresco Software, Ltd.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *       http://www.apache.org/licenses/LICENSE-2.0
+ *     http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -31,23 +31,31 @@ public class VariableCreatedListenerDelegate implements ActivitiEventListener {
 
     private final ToVariableCreatedConverter converter;
 
-    public VariableCreatedListenerDelegate(List<VariableEventListener<VariableCreatedEvent>> listeners,
-                                           ToVariableCreatedConverter converter) {
+    private final VariableEventFilter variableEventFilter;
+
+    public VariableCreatedListenerDelegate(
+        List<VariableEventListener<VariableCreatedEvent>> listeners,
+        ToVariableCreatedConverter converter,
+        VariableEventFilter variableEventFilter) {
         this.listeners = listeners;
         this.converter = converter;
+        this.variableEventFilter = variableEventFilter;
     }
 
     @Override
     public void onEvent(ActivitiEvent event) {
         if (event instanceof ActivitiVariableEvent) {
-            converter.from((ActivitiVariableEvent) event)
+            ActivitiVariableEvent internalEvent = (ActivitiVariableEvent) event;
+            if (variableEventFilter.shouldEmmitEvent(internalEvent)) {
+                converter.from(internalEvent)
                     .ifPresent(convertedEvent -> {
                         if (listeners != null) {
-                            for ( VariableEventListener<VariableCreatedEvent> listener : listeners ) {
+                            for (VariableEventListener<VariableCreatedEvent> listener : listeners) {
                                 listener.onEvent(convertedEvent);
                             }
                         }
                     });
+            }
         }
     }
 

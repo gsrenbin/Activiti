@@ -3,7 +3,7 @@
          xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
   <modelVersion>4.0.0</modelVersion>
   <parent>
-    <groupId>org.activiti.build</groupId>
+    <groupId>org.activiti</groupId>
     <artifactId>activiti-parent</artifactId>
     <version>7.1.0-SNAPSHOT</version>
   </parent>
@@ -12,63 +12,40 @@
   <packaging>pom</packaging>
   <name>Activiti :: Core :: Parent</name>
   <properties>
-    <batik.version>1.10</batik.version>
-    <commons-email.version>1.5</commons-email.version>
-    <commons-fileupload.version>1.3.3</commons-fileupload.version>
-    <el-api.version>2.2</el-api.version>
-    <geronimo.version>1.1.1</geronimo.version>
-    <java-uuid-generator.version>3.1.4</java-uuid-generator.version>
-    <javaGeom.version>0.11.1</javaGeom.version>
-    <javax.enterprise.concurrent-api.version>1.0</javax.enterprise.concurrent-api.version>
-    <jaxb-api.version>2.3.1</jaxb-api.version>
-    <jgraphx.version>3.9.8.1</jgraphx.version>
-    <json-unit.version>1.24.0</json-unit.version>
-    <jsr250-api.version>1.0</jsr250-api.version>
-    <juel.version>2.2.7</juel.version>
-    <hibernate-jpa-2.1-api.version>1.0.2.Final</hibernate-jpa-2.1-api.version>
-    <mybatis.version>3.5.0</mybatis.version>
-    <subethasmtp-wiser.version>1.2</subethasmtp-wiser.version>
-    <xmlgraphics-commons.version>2.2</xmlgraphics-commons.version>
-    <subethasmtp-wiser.version>1.2</subethasmtp-wiser.version>
-    <xmlgraphics-commons.version>2.2</xmlgraphics-commons.version>
+    <batik.version>1.13</batik.version>
     <checkstyle-maven-plugin.version>3.1.0</checkstyle-maven-plugin.version>
+    <commons-email.version>1.5</commons-email.version>
+    <jakarta-enterprise-concurrent.version>1.1.2</jakarta-enterprise-concurrent.version>
+    <java-uuid-generator.version>4.0.1</java-uuid-generator.version>
+    <javaGeom.version>0.11.1</javaGeom.version>
+    <jgraphx.version>4.1.0</jgraphx.version>
+    <joda-time.version>2.10.6</joda-time.version>
+    <json-unit.version>2.18.0</json-unit.version>
+    <juel.version>2.2.7</juel.version>
+    <mybatis.version>3.5.5</mybatis.version>
+    <subethasmtp-wiser.version>1.2</subethasmtp-wiser.version>
+    <xmlgraphics-commons.version>2.4</xmlgraphics-commons.version>
   </properties>
   <dependencyManagement>
     <dependencies>
       <dependency>
-        <groupId>org.activiti.api</groupId>
+        <groupId>org.activiti</groupId>
         <artifactId>activiti-api-dependencies</artifactId>
         <version>${project.version}</version>
         <type>pom</type>
         <scope>import</scope>
       </dependency>
       <dependency>
-        <groupId>org.activiti.core.common</groupId>
+        <groupId>org.activiti</groupId>
         <artifactId>activiti-core-common-dependencies</artifactId>
         <version>${project.version}</version>
         <type>pom</type>
         <scope>import</scope>
       </dependency>
       <dependency>
-        <groupId>javax.el</groupId>
-        <artifactId>el-api</artifactId>
-        <version>${el-api.version}</version>
-      </dependency>
-      <dependency>
-        <groupId>org.hibernate.javax.persistence</groupId>
-        <artifactId>hibernate-jpa-2.1-api</artifactId>
-        <version>${hibernate-jpa-2.1-api.version}</version>
-      </dependency>
-      <dependency>
-        <groupId>commons-fileupload</groupId>
-        <artifactId>commons-fileupload</artifactId>
-        <version>${commons-fileupload.version}</version>
-      </dependency>
-      <dependency>
-        <groupId>javax.enterprise.concurrent</groupId>
-        <artifactId>javax.enterprise.concurrent-api</artifactId>
-        <version>${javax.enterprise.concurrent-api.version}</version>
-        <scope>provided</scope>
+        <groupId>jakarta.enterprise.concurrent</groupId>
+        <artifactId>jakarta.enterprise.concurrent-api</artifactId>
+        <version>${jakarta-enterprise-concurrent.version}</version>
       </dependency>
       <dependency>
         <groupId>de.odysseus.juel</groupId>
@@ -91,11 +68,6 @@
         <version>${commons-email.version}</version>
       </dependency>
       <dependency>
-        <groupId>org.apache.geronimo.specs</groupId>
-        <artifactId>geronimo-jta_1.1_spec</artifactId>
-        <version>${geronimo.version}</version>
-      </dependency>
-      <dependency>
         <groupId>org.mybatis</groupId>
         <artifactId>mybatis</artifactId>
         <version>${mybatis.version}</version>
@@ -114,11 +86,6 @@
         <groupId>com.github.vlsi.mxgraph</groupId>
         <artifactId>jgraphx</artifactId>
         <version>${jgraphx.version}</version>
-      </dependency>
-      <dependency>
-        <groupId>javax.annotation</groupId>
-        <artifactId>jsr250-api</artifactId>
-        <version>${jsr250-api.version}</version>
       </dependency>
       <!-- batik -->
       <dependency>
@@ -149,23 +116,29 @@
       </dependency>
       <dependency>
         <groupId>org.apache.xmlgraphics</groupId>
+        <artifactId>batik-transcoder</artifactId>
+        <version>${batik.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>org.apache.xmlgraphics</groupId>
+        <artifactId>batik-codec</artifactId>
+        <version>${batik.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>org.apache.xmlgraphics</groupId>
         <artifactId>batik-svg-dom</artifactId>
         <version>${batik.version}</version>
-        <scope>test</scope>
       </dependency>
       <dependency>
         <groupId>org.apache.xmlgraphics</groupId>
         <artifactId>batik-anim</artifactId>
         <version>${batik.version}</version>
-        <scope>test</scope>
       </dependency>
       <dependency>
         <groupId>org.apache.xmlgraphics</groupId>
         <artifactId>batik-parser</artifactId>
         <version>${batik.version}</version>
-        <scope>test</scope>
       </dependency>
-      <!-- Test -->
       <dependency>
         <groupId>net.javacrumbs.json-unit</groupId>
         <artifactId>json-unit-fluent</artifactId>
@@ -185,22 +158,21 @@
         </exclusions>
       </dependency>
       <dependency>
-        <groupId>javax.xml.bind</groupId>
-        <artifactId>jaxb-api</artifactId>
-        <version>${jaxb-api.version}</version>
-        <scope>test</scope>
+        <groupId>joda-time</groupId>
+        <artifactId>joda-time</artifactId>
+        <version>${joda-time.version}</version>
       </dependency>
     </dependencies>
   </dependencyManagement>
   <dependencies>
     <dependency>
-      <groupId>org.activiti.api</groupId>
+      <groupId>org.activiti</groupId>
       <artifactId>activiti-api-dependencies</artifactId>
       <version>${project.version}</version>
       <type>pom</type>
     </dependency>
     <dependency>
-      <groupId>org.activiti.core.common</groupId>
+      <groupId>org.activiti</groupId>
       <artifactId>activiti-core-common-dependencies</artifactId>
       <version>${project.version}</version>
       <type>pom</type>

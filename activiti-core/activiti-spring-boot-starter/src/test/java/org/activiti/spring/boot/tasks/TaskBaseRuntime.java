@@ -1,11 +1,11 @@
 /*
- * Copyright 2018 Alfresco, Inc. and/or its affiliates.
+ * Copyright 2010-2020 Alfresco Software, Ltd.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *       http://www.apache.org/licenses/LICENSE-2.0
+ *     http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -13,15 +13,13 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package org.activiti.spring.boot.tasks;
 
+import static java.util.Collections.emptyMap;
 import static org.assertj.core.api.Assertions.assertThat;
 
-import java.util.Collections;
 import java.util.List;
 import java.util.Map;
-
 import org.activiti.api.model.shared.model.VariableInstance;
 import org.activiti.api.process.model.ProcessInstance;
 import org.activiti.api.runtime.shared.query.Pageable;
@@ -30,9 +28,9 @@ import org.activiti.api.task.model.Task.TaskStatus;
 import org.activiti.api.task.model.builders.TaskPayloadBuilder;
 import org.activiti.api.task.runtime.TaskRuntime;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.context.TestComponent;
+import org.springframework.stereotype.Component;
 
-@TestComponent
+@Component
 public class TaskBaseRuntime {
 
     @Autowired
@@ -59,11 +57,11 @@ public class TaskBaseRuntime {
     }
 
     public void completeTask(String taskId) {
-        completeTask(taskId, Collections.emptyMap());
+        completeTask(taskId, emptyMap());
     }
 
     public void completeTask(Task task) {
-        this.completeTask(task.getId(), Collections.emptyMap());
+        this.completeTask(task.getId(), emptyMap());
     }
 
     public void completeTask(Task task, Map<String, Object> variables) {

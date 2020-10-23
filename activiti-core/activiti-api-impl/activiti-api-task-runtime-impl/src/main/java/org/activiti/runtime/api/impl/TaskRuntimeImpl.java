@@ -1,11 +1,11 @@
 /*
- * Copyright 2018 Alfresco, Inc. and/or its affiliates.
+ * Copyright 2010-2020 Alfresco Software, Ltd.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *       http://www.apache.org/licenses/LICENSE-2.0
+ *     http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -13,7 +13,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package org.activiti.runtime.api.impl;
 
 import org.activiti.api.model.shared.model.VariableInstance;
@@ -24,6 +23,7 @@ import org.activiti.api.runtime.shared.security.SecurityManager;
 import org.activiti.api.task.model.Task;
 import org.activiti.api.task.model.builders.TaskPayloadBuilder;
 import org.activiti.api.task.model.impl.TaskImpl;
+import org.activiti.api.task.model.payloads.AssignTaskPayload;
 import org.activiti.api.task.model.payloads.CandidateGroupsPayload;
 import org.activiti.api.task.model.payloads.CandidateUsersPayload;
 import org.activiti.api.task.model.payloads.ClaimTaskPayload;
@@ -90,6 +90,10 @@ public class TaskRuntimeImpl implements TaskRuntime {
     public Task task(String taskId) {
         return taskConverter.fromWithCandidates(taskRuntimeHelper.getInternalTaskWithChecks(taskId));
     }
+    
+    private Task reassignedTask(String taskId) {
+        return taskConverter.fromWithCandidates(taskRuntimeHelper.getInternalTask(taskId));
+    }
 
     @Override
     public Page<Task> tasks(Pageable pageable) {
@@ -146,20 +150,21 @@ public class TaskRuntimeImpl implements TaskRuntime {
         } catch (IllegalStateException ex) {
             throw new IllegalStateException("The authenticated user cannot complete task" + completeTaskPayload.getTaskId() + " due he/she cannot access to the task");
         }
-        // validate the the task does have an assignee
+        // validate the task does have an assignee
         if (task.getAssignee() == null || task.getAssignee().isEmpty()) {
             throw new IllegalStateException("The task needs to be claimed before trying to complete it");
         }
         if (!task.getAssignee().equals(authenticatedUserId)) {
             throw new IllegalStateException("You cannot complete the task if you are not assigned to it");
         }
-        
+
         taskRuntimeHelper.handleCompleteTaskPayload(completeTaskPayload);
-                
+
         taskService.complete(completeTaskPayload.getTaskId(),
                 completeTaskPayload.getVariables(), true);
 
 
+        ((TaskImpl) task).setCompletedBy(authenticatedUserId);
         ((TaskImpl) task).setStatus(Task.TaskStatus.COMPLETED);
 
         return task;
@@ -174,7 +179,7 @@ public class TaskRuntimeImpl implements TaskRuntime {
         } catch (IllegalStateException ex) {
             throw new IllegalStateException("The authenticated user cannot claim task" + claimTaskPayload.getTaskId() + " due it is not a candidate for it");
         }
-        // validate the the task doesn't have an assignee
+        // validate the task doesn't have an assignee
         if (task.getAssignee() != null && !task.getAssignee().isEmpty()) {
             throw new IllegalStateException("The task was already claimed, the assignee of this task needs to release it first for you to claim it");
         }
@@ -189,25 +194,9 @@ public class TaskRuntimeImpl implements TaskRuntime {
 
     @Override
     public Task release(ReleaseTaskPayload releaseTaskPayload) {
-        // Validate that the task is visible by the currently authorized user
-        Task task;
-        try {
-            task = task(releaseTaskPayload.getTaskId());
-        } catch (IllegalStateException ex) {
-            throw new IllegalStateException("The authenticated user cannot release task" + releaseTaskPayload.getTaskId() + " due it is not a candidate for it");
-        }
-        // validate the the task doesn't have an assignee
-        if (task.getAssignee() == null || task.getAssignee().isEmpty()) {
-            throw new IllegalStateException("You cannot release a task that is not claimed");
-        }
-        String authenticatedUserId = securityManager.getAuthenticatedUserId();
-        // validate that you are trying to release task where you are the assignee
-        if (!task.getAssignee().equals(authenticatedUserId)) {
-            throw new IllegalStateException("You cannot release a task where you are not the assignee");
-        }
-
-        taskService.unclaim(releaseTaskPayload.getTaskId());
-        return task(releaseTaskPayload.getTaskId());
+        String taskId =  releaseTaskPayload.getTaskId();
+        releaseTask(taskId);
+        return task(taskId);
     }
 
     @Override
@@ -435,11 +424,21 @@ public class TaskRuntimeImpl implements TaskRuntime {
         taskRuntimeHelper.assertHasAccessToTask(saveTaskPayload.getTaskId());
 
         taskRuntimeHelper.handleSaveTaskPayload(saveTaskPayload);
-        
+
         taskService.setVariablesLocal(saveTaskPayload.getTaskId(),
                 saveTaskPayload.getVariables());
     }
 
+
+    @Override
+    public Task assign(AssignTaskPayload assignTaskPayload) {
+        String assignee = assignTaskPayload.getAssignee();
+        String taskId = assignTaskPayload.getTaskId();
+
+        assertAssigneeIsACandidateUser(taskId, assignee);
+        reassignTask(taskId, assignee);
+        return reassignedTask(taskId);
+    }
 
     private List<IdentityLink> getIdentityLinks(String taskId) {
         String authenticatedUserId = securityManager.getAuthenticatedUserId();
@@ -454,6 +453,35 @@ public class TaskRuntimeImpl implements TaskRuntime {
             return taskService.getIdentityLinksForTask(taskId);
         }
         throw new IllegalStateException("There is no authenticated user, we need a user authenticated to find tasks");
+    }
+    
+    private void assertAssigneeIsACandidateUser(String taskId, String assignee) {
+        List<String> userCandidates = userCandidates(taskId);
+        if(!userCandidates.contains(assignee)){
+            throw new IllegalStateException("You cannot assign a task to " + assignee + " due it is not a candidate for it");
+        }
+    }
+    
+    private void reassignTask(String taskId, String assignee) {
+        releaseTask(taskId);
+        taskService.claim(taskId, assignee);
+    }
+    
+    private void releaseTask(String taskId) {
+        assertCanReleaseTask(taskId);
+        taskService.unclaim(taskId);
+    }
+    
+    private void assertCanReleaseTask(String taskId) {
+        Task task = task(taskId);
+        
+        if (task.getAssignee() == null || task.getAssignee().isEmpty()) {
+            throw new IllegalStateException("You cannot release a task that is not claimed");
+        }
+        String authenticatedUserId = securityManager.getAuthenticatedUserId();
+        if (!task.getAssignee().equals(authenticatedUserId)) {
+            throw new IllegalStateException("You cannot release a task where you are not the assignee");
+        }
     }
 
 }

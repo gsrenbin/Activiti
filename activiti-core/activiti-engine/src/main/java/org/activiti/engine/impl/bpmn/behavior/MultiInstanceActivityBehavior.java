@@ -1,8 +1,11 @@
-/* Licensed under the Apache License, Version 2.0 (the "License");
+/*
+ * Copyright 2010-2020 Alfresco Software, Ltd.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *      http://www.apache.org/licenses/LICENSE-2.0
+ *     http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -14,9 +17,12 @@
 package org.activiti.engine.impl.bpmn.behavior;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collection;
+import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Map;
 import org.activiti.bpmn.model.Activity;
 import org.activiti.bpmn.model.BoundaryEvent;
 import org.activiti.bpmn.model.CompensateEventDefinition;
@@ -31,9 +37,11 @@ import org.activiti.engine.delegate.Expression;
 import org.activiti.engine.delegate.event.ActivitiEventType;
 import org.activiti.engine.delegate.event.impl.ActivitiEventBuilder;
 import org.activiti.engine.impl.bpmn.helper.ErrorPropagation;
+import org.activiti.engine.impl.cmd.CompleteTaskCmd;
 import org.activiti.engine.impl.context.Context;
 import org.activiti.engine.impl.delegate.ActivityBehavior;
 import org.activiti.engine.impl.delegate.SubProcessActivityBehavior;
+import org.activiti.engine.impl.interceptor.CommandContext;
 import org.activiti.engine.impl.persistence.entity.ExecutionEntity;
 import org.activiti.engine.impl.util.CollectionUtil;
 import org.activiti.engine.impl.util.ProcessDefinitionUtil;
@@ -77,10 +85,10 @@ public abstract class MultiInstanceActivityBehavior extends FlowNodeActivityBeha
   private String outputDataItem;
 
   /**
+   * @param activity
+   *          The {@link Activity} which has multi instance behaviour
    * @param innerActivityBehavior
    *          The original {@link ActivityBehavior} of the activity that will be wrapped inside this behavior.
-   * @param isSequential
-   *          Indicates whether the multi instance behavior must be sequential or parallel
    */
   public MultiInstanceActivityBehavior(Activity activity, AbstractBpmnActivityBehavior innerActivityBehavior) {
     this.activity = activity;
@@ -90,6 +98,7 @@ public abstract class MultiInstanceActivityBehavior extends FlowNodeActivityBeha
   public void execute(DelegateExecution execution) {
     if (getLocalLoopVariable(execution, getCollectionElementIndexVariable()) == null) {
 
+      clearLoopDataOutputRef(execution);
       int nrOfInstances = 0;
 
       try {
@@ -103,11 +112,17 @@ public abstract class MultiInstanceActivityBehavior extends FlowNodeActivityBeha
       }
 
     } else {
-      Context.getCommandContext().getHistoryManager().recordActivityStart((ExecutionEntity) execution);
+      getCommandContext().getHistoryManager().recordActivityStart((ExecutionEntity) execution);
 
       innerActivityBehavior.execute(execution);
     }
   }
+
+    private void clearLoopDataOutputRef(DelegateExecution execution) {
+        if (hasLoopDataOutputRef()) {
+          execution.setVariable(getLoopDataOutputRef(), new ArrayList<>());
+        }
+    }
 
   protected abstract int createInstances(DelegateExecution execution);
 
@@ -125,7 +140,7 @@ public abstract class MultiInstanceActivityBehavior extends FlowNodeActivityBeha
         }
 
         if (boundaryEvent.getEventDefinitions().get(0) instanceof CompensateEventDefinition) {
-          ExecutionEntity childExecutionEntity = Context.getCommandContext().getExecutionEntityManager()
+          ExecutionEntity childExecutionEntity = getCommandContext().getExecutionEntityManager()
               .createChildExecution((ExecutionEntity) execution);
           childExecutionEntity.setParentId(execution.getId());
           childExecutionEntity.setCurrentFlowElement(boundaryEvent);
@@ -310,7 +325,7 @@ public abstract class MultiInstanceActivityBehavior extends FlowNodeActivityBeha
    * Since no transitions are followed when leaving the inner activity, it is needed to call the end listeners yourself.
    */
   protected void callActivityEndListeners(DelegateExecution execution) {
-    Context.getCommandContext().getProcessEngineConfiguration().getListenerNotificationHelper()
+    getCommandContext().getProcessEngineConfiguration().getListenerNotificationHelper()
       .executeExecutionListeners(activity, execution, ExecutionListener.EVENTNAME_END);
   }
 
@@ -337,7 +352,7 @@ public abstract class MultiInstanceActivityBehavior extends FlowNodeActivityBeha
 
   protected void dispatchActivityCompletedEvent(DelegateExecution execution) {
     ExecutionEntity executionEntity = (ExecutionEntity) execution;
-    Context.getCommandContext().getEventDispatcher().dispatchEvent(ActivitiEventBuilder.createActivityEvent(
+    getCommandContext().getEventDispatcher().dispatchEvent(ActivitiEventBuilder.createActivityEvent(
             ActivitiEventType.ACTIVITY_COMPLETED,
             executionEntity.getActivityId(),
             executionEntity.getName(),
@@ -424,6 +439,10 @@ public abstract class MultiInstanceActivityBehavior extends FlowNodeActivityBeha
         return outputDataItem;
     }
 
+    public boolean hasOutputDataItem() {
+      return outputDataItem != null && !outputDataItem.trim().isEmpty();
+    }
+
     public void setOutputDataItem(String outputDataItem) {
         this.outputDataItem = outputDataItem;
     }
@@ -439,8 +458,47 @@ public abstract class MultiInstanceActivityBehavior extends FlowNodeActivityBeha
             } else {
                 resultCollection = new ArrayList<>();
             }
-            resultCollection.add(childExecution.getVariable(getOutputDataItem()));
+            resultCollection.add(getResultElementItem(childExecution));
             setLoopVariable(miRootExecution, getLoopDataOutputRef(), resultCollection);
+        }
+    }
+
+    protected Object getResultElementItem(DelegateExecution childExecution) {
+        CommandContext commandContext = getCommandContext();
+        if (commandContext != null && commandContext.getCommand() instanceof CompleteTaskCmd) {
+            //in the case of a User Task, the variables are directly attached to the TaskEntity
+            //and not in the child execution. CompleteTaskCmd will delete the task and all its
+            //variables, but before doing so it's keeping a cache of existing local variables that
+            //can be retrieve here and used int the result collection.
+            Map<String, Object> taskVariables = ((CompleteTaskCmd) commandContext
+                .getCommand()).getTaskVariables();
+            return getResultElementItem(taskVariables);
+        }
+        // in the case where it's not a User Task, the local variables will be available directly
+        // in the child execution
+        return getResultElementItem(childExecution.getVariablesLocal());
+    }
+
+    protected CommandContext getCommandContext() {
+        return Context.getCommandContext();
+    }
+
+    protected Object getResultElementItem(Map<String, Object> availableVariables) {
+        if (hasOutputDataItem()) {
+            return availableVariables.get(getOutputDataItem());
+        } else {
+            //exclude from the result all the built-in multi-instances variables
+            //and loopDataOutputRef itself that may exist in the context depending
+            // on the variable propagation
+            List<String> resultItemExclusions = Arrays.asList(
+                getLoopDataOutputRef(),
+                getCollectionElementIndexVariable(),
+                NUMBER_OF_INSTANCES,
+                NUMBER_OF_COMPLETED_INSTANCES,
+                NUMBER_OF_ACTIVE_INSTANCES);
+            HashMap<String, Object> resultItem = new HashMap<>(availableVariables);
+            resultItem.keySet().removeAll(resultItemExclusions);
+            return resultItem;
         }
     }
 
